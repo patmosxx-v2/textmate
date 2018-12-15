@@ -21,10 +21,11 @@ NSString* const kUserDefaultsSubmitUsageInfoKey            = @"SoftwareUpdateSub
 NSString* const kUserDefaultsAskBeforeUpdatingKey          = @"SoftwareUpdateAskBeforeUpdating";
 NSString* const kUserDefaultsLastSoftwareUpdateCheckKey    = @"SoftwareUpdateLastPoll";
 NSString* const kUserDefaultsSoftwareUpdateSuspendUntilKey = @"SoftwareUpdateSuspendUntil";
+NSString* const kUserDefaultsSoftwareUpdateDisableReadOnlyFileSystemWarningKey = @"SoftwareUpdateDisableReadOnlyFileSystemWarningKey";
 
 NSString* const kSoftwareUpdateChannelRelease              = @"release";
-NSString* const kSoftwareUpdateChannelBeta                 = @"beta";
-NSString* const kSoftwareUpdateChannelNightly              = @"nightly";
+NSString* const kSoftwareUpdateChannelPrerelease           = @"beta";
+NSString* const kSoftwareUpdateChannelCanary               = @"nightly";
 
 struct shared_state_t
 {
@@ -35,8 +36,17 @@ struct shared_state_t
 typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 
 @interface SoftwareUpdate ()
+{
+	key_chain_t keyChain;
+	NSTimeInterval pollInterval;
+
+	shared_state_ptr sharedState;
+	CGFloat secondsLeft;
+
+	BOOL didShowReadOnlyFileSystemWarning;
+}
 @property (nonatomic) NSDate* lastPoll;
-@property (nonatomic) BOOL isChecking;
+@property (nonatomic, readwrite, getter = isChecking) BOOL checking;
 @property (nonatomic) NSString* lastVersionDownloaded;
 @property (nonatomic) NSString* errorString;
 @property (nonatomic) NSTimer* pollTimer;
@@ -48,14 +58,6 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 @end
 
 @implementation SoftwareUpdate
-{
-	key_chain_t keyChain;
-	NSTimeInterval pollInterval;
-
-	shared_state_ptr sharedState;
-	CGFloat secondsLeft;
-}
-
 + (instancetype)sharedInstance
 {
 	static SoftwareUpdate* sharedInstance = [self new];
@@ -65,7 +67,7 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 + (void)initialize
 {
 	[[NSUserDefaults standardUserDefaults] registerDefaults:@{
-		kUserDefaultsSoftwareUpdateChannelKey : kSoftwareUpdateChannelRelease
+		kUserDefaultsSoftwareUpdateChannelKey: kSoftwareUpdateChannelRelease
 	}];
 }
 
@@ -82,6 +84,20 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 	return self;
 }
 
+- (void)showReadOnlyFileSystemWarning:(id)sender
+{
+	NSString* appName = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleName"] ?: NSProcessInfo.processInfo.processName;
+
+	NSAlert* alert = [[NSAlert alloc] init];
+	alert.messageText            = @"Software Update Disabled";
+	alert.informativeText        = [NSString stringWithFormat:@"%1$@ is running on a read-only file system and can therefore not be updated.\n\nIf you downloaded %1$@ from the internet then moving it out of the Downloads folder should solve the problem.", appName];
+	alert.showsSuppressionButton = YES;
+	[alert addButtonWithTitle:@"OK"];
+	[alert runModal];
+	if(alert.suppressionButton.state == NSOnState)
+		[[NSUserDefaults standardUserDefaults] setBool:YES forKey:kUserDefaultsSoftwareUpdateDisableReadOnlyFileSystemWarningKey];
+}
+
 - (void)scheduleVersionCheck:(id)sender
 {
 	D(DBF_SoftwareUpdate_Check, bug("had pending check: %s\n", BSTR(self.pollTimer)););
@@ -89,11 +105,21 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 	self.pollTimer = nil;
 
 	struct statfs sfsb;
-	BOOL readOnlyFileSystem = statfs(oak::application_t::path().c_str(), &sfsb) != 0 || (sfsb.f_flags & MNT_RDONLY);
+	BOOL readOnlyFileSystem = statfs([NSBundle mainBundle].bundlePath.fileSystemRepresentation, &sfsb) != 0 || (sfsb.f_flags & MNT_RDONLY);
 	BOOL disablePolling = [[NSUserDefaults standardUserDefaults] boolForKey:kUserDefaultsDisableSoftwareUpdatesKey];
 	D(DBF_SoftwareUpdate_Check, bug("download visible %s, disable polling %s, read only file system %s → %s\n", BSTR(self.downloadWindow), BSTR(disablePolling), BSTR(readOnlyFileSystem), BSTR(!self.downloadWindow && !disablePolling && !readOnlyFileSystem)););
-	if(_downloadWindow.isWorking || disablePolling || readOnlyFileSystem)
+	if(_downloadWindow.isWorking || disablePolling)
 		return;
+
+	if(readOnlyFileSystem)
+	{
+		if(!didShowReadOnlyFileSystemWarning && ![[NSUserDefaults standardUserDefaults] boolForKey:kUserDefaultsSoftwareUpdateDisableReadOnlyFileSystemWarningKey])
+		{
+			didShowReadOnlyFileSystemWarning = YES;
+			[self performSelector:@selector(showReadOnlyFileSystemWarning:) withObject:nil afterDelay:0];
+		}
+		return;
+	}
 
 	NSDate* nextCheck = [(self.lastPoll ?: [NSDate distantPast]) dateByAddingTimeInterval:pollInterval];
 	if(NSDate* suspendUntil = [[NSUserDefaults standardUserDefaults] objectForKey:kUserDefaultsSoftwareUpdateSuspendUntilKey])
@@ -126,8 +152,8 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 {
 	D(DBF_SoftwareUpdate_Check, bug("\n"););
 
-	BOOL isShiftDown = OakIsAlternateKeyOrMouseEvent(NSShiftKeyMask);
-	NSURL* url = [self.channels objectForKey:OakIsAlternateKeyOrMouseEvent(NSAlternateKeyMask) ? kSoftwareUpdateChannelNightly : [[NSUserDefaults standardUserDefaults] stringForKey:kUserDefaultsSoftwareUpdateChannelKey]];
+	BOOL isShiftDown = OakIsAlternateKeyOrMouseEvent(NSEventModifierFlagShift);
+	NSURL* url = [self.channels objectForKey:OakIsAlternateKeyOrMouseEvent(NSEventModifierFlagOption) ? kSoftwareUpdateChannelCanary : [[NSUserDefaults standardUserDefaults] stringForKey:kUserDefaultsSoftwareUpdateChannelKey]];
 	[self checkVersionAtURL:url inBackground:NO allowRedownload:isShiftDown];
 }
 
@@ -135,7 +161,7 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 {
 	if(self.isChecking)
 		return;
-	self.isChecking = YES;
+	self.checking = YES;
 
 	dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
 		std::string error = NULL_STR;
@@ -144,7 +170,7 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 		dispatch_async(dispatch_get_main_queue(), ^{
 			self.errorString = [NSString stringWithCxxString:error];
 			self.lastPoll    = [NSDate date];
-			self.isChecking  = NO;
+			self.checking    = NO;
 
 			if(self.errorString)
 			{
@@ -152,7 +178,7 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 				{
 					NSAlert* alert        = [[NSAlert alloc] init];
 					alert.alertStyle      = NSAlertStyleInformational;
-					alert.messageText     = @"Error checking for new version";
+					alert.messageText     = @"Error Checking for new Version";
 					alert.informativeText = self.errorString;
 					[alert addButtonWithTitle:@"Continue"];
 					[alert runModal];
@@ -340,7 +366,8 @@ typedef std::shared_ptr<shared_state_t> shared_state_ptr;
 	if(err == NULL_STR)
 	{
 		self.downloadWindow.activityText = @"Relaunching…";
-		oak::application_t::relaunch();
+		NSString* args = [NSString stringWithFormat:@"-disableSessionRestore NO -didUpdateFrom '%@'", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"]];
+		oak::application_t::relaunch([args UTF8String]);
 	}
 	else
 	{

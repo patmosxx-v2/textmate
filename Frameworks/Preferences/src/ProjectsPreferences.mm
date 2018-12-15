@@ -3,7 +3,7 @@
 #import <settings/settings.h>
 #import <OakAppKit/NSImage Additions.h>
 #import <OakAppKit/NSMenuItem Additions.h>
-#import <OakAppKit/OakTabBarView.h>
+#import <OakTabBarView/OakTabBarView.h>
 #import <OakFoundation/NSString Additions.h>
 #import <OakFoundation/OakStringListTransformer.h>
 
@@ -16,24 +16,23 @@
 		[OakStringListTransformer createTransformerWithName:@"OakHTMLOutputPlacementSettingsTransformer" andObjectsArray:@[ @"bottom", @"right", @"window" ]];
 
 		self.defaultsProperties = @{
-			@"foldersOnTop"            : kUserDefaultsFoldersOnTopKey,
-			@"tabsAboveDocument"       : kUserDefaultsTabsAboveDocumentKey,
-			@"showFileExtensions"      : kUserDefaultsShowFileExtensionsKey,
-			@"disableTabBarCollapsing" : kUserDefaultsDisableTabBarCollapsingKey,
-			@"disableAutoResize"       : kUserDefaultsDisableFileBrowserWindowResizeKey,
-			@"autoRevealFile"          : kUserDefaultsAutoRevealFileKey,
-			@"fileBrowserPlacement"    : kUserDefaultsFileBrowserPlacementKey,
-			@"htmlOutputPlacement"     : kUserDefaultsHTMLOutputPlacementKey,
+			@"foldersOnTop":                 kUserDefaultsFoldersOnTopKey,
+			@"showFileExtensions":           kUserDefaultsShowFileExtensionsKey,
+			@"disableTabBarCollapsing":      kUserDefaultsDisableTabBarCollapsingKey,
+			@"disableAutoResize":            kUserDefaultsDisableFileBrowserWindowResizeKey,
+			@"autoRevealFile":               kUserDefaultsAutoRevealFileKey,
+			@"fileBrowserPlacement":         kUserDefaultsFileBrowserPlacementKey,
+			@"htmlOutputPlacement":          kUserDefaultsHTMLOutputPlacementKey,
 
-			@"allowExpandingLinks"          : kUserDefaultsAllowExpandingLinksKey,
-			@"fileBrowserSingleClickToOpen" : kUserDefaultsFileBrowserSingleClickToOpenKey,
-			@"disableTabReordering"         : kUserDefaultsDisableTabReorderingKey,
+			@"allowExpandingLinks":          kUserDefaultsAllowExpandingLinksKey,
+			@"fileBrowserSingleClickToOpen": kUserDefaultsFileBrowserSingleClickToOpenKey,
+			@"disableTabReordering":         kUserDefaultsDisableTabReorderingKey,
 		};
 
 		self.tmProperties = @{
-			@"excludePattern" : [NSString stringWithCxxString:kSettingsExcludeKey],
-			@"includePattern" : [NSString stringWithCxxString:kSettingsIncludeKey],
-			@"binaryPattern"  : [NSString stringWithCxxString:kSettingsBinaryKey],
+			@"excludePattern": [NSString stringWithCxxString:kSettingsExcludeKey],
+			@"includePattern": [NSString stringWithCxxString:kSettingsIncludeKey],
+			@"binaryPattern":  [NSString stringWithCxxString:kSettingsBinaryKey],
 		};
 	}
 	return self;

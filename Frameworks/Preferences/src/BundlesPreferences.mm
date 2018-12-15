@@ -70,7 +70,7 @@ static NSMutableSet* BundlesBeingInstalled = [NSMutableSet set];
 @end
 
 @implementation BundlesPreferences
-- (NSString*)identifier            { return @"Bundles"; }
+- (NSString*)viewIdentifier        { return @"Bundles"; }
 - (NSImage*)toolbarItemImage       { return [[NSWorkspace sharedWorkspace] iconForFileType:@"tmbundle"]; }
 - (NSString*)toolbarItemLabel      { return @"Bundles"; }
 - (NSView*)initialKeyView          { return bundlesTableView; }
@@ -167,10 +167,10 @@ static NSMutableSet* BundlesBeingInstalled = [NSMutableSet set];
 - (void)tableView:(NSTableView*)aTableView didClickTableColumn:(NSTableColumn*)aTableColumn
 {
 	NSDictionary* map = @{
-		@"name"         : @"name",
-		@"installed"    : @"installed",
-		@"date"         : @"downloadLastUpdated",
-		@"description"  : @"textSummary"
+		@"name":        @"name",
+		@"installed":   @"installed",
+		@"date":        @"downloadLastUpdated",
+		@"description": @"textSummary"
 	};
 
 	NSString* key = map[aTableColumn.identifier];

@@ -5,12 +5,12 @@
 #import "Printing.h"
 #import "watch.h"
 #import "merge.h"
+#import <FileBrowser/FileItemImage.h>
 #import <OakFoundation/OakFoundation.h>
 #import <OakFoundation/NSString Additions.h>
 #import <OakAppKit/OakEncodingPopUpButton.h>
 #import <OakAppKit/OakSavePanel.h>
 #import <OakAppKit/NSAlert Additions.h>
-#import <OakAppKit/OakFileIconImage.h>
 #import <BundlesManager/BundlesManager.h>
 #import <authorization/constants.h>
 #import <cf/run_loop.h>
@@ -175,7 +175,9 @@ NSString* OakDocumentBookmarkIdentifier           = @"bookmark";
 
 	NSHashTable* _documentEditors;
 	scm::status::type _scmStatus;
-	OakFileIconImage* _icon;
+	NSImage* _icon;
+	BOOL _iconIsModified;
+	BOOL _iconIsOnDisk;
 	NSString* _cachedDisplayName;
 
 	std::unique_ptr<ng::buffer_t> _buffer;
@@ -709,29 +711,22 @@ NSString* OakDocumentBookmarkIdentifier           = @"bookmark";
 		{
 			[_window.attachedSheet orderOut:_self];
 
-			EncodingWindowController* controller = [[EncodingWindowController alloc] initWithFirst:content->begin() last:content->end()];
+			EncodingWindowController* controller = [[EncodingWindowController alloc] initWithData:[NSData dataWithBytesNoCopy:content->begin() length:content->size() freeWhenDone:NO]];
 			controller.displayName = _self.displayName;
 
-			__block encoding::classifier_t db;
-			static std::string const kEncodingFrequenciesPath = path::join(path::home(), "Library/Caches/com.macromates.TextMate/EncodingFrequencies.binary");
-			db.load(kEncodingFrequenciesPath);
-
 			std::multimap<double, std::string> probabilities;
-			for(auto const& charset : db.charsets())
-				probabilities.emplace(1 - db.probability(content->begin(), content->end(), charset), charset);
+			for(auto const& charset : encoding::charsets())
+				probabilities.emplace(1 - encoding::probability(content->begin(), content->end(), charset), charset);
 			if(!probabilities.empty() && probabilities.begin()->first < 1)
 				controller.encoding = [NSString stringWithCxxString:probabilities.begin()->second];
 
 			[[NSNotificationCenter defaultCenter] postNotificationName:OakDocumentWillShowAlertNotification object:_self];
 			[controller beginSheetModalForWindow:_window completionHandler:^(NSModalResponse response){
-				if(response != NSModalResponseAbort)
+				if(response != NSModalResponseCancel)
 				{
-					context->set_charset(to_s(controller.encoding));
+					context->set_charset(to_s(controller.encodingNoBOM));
 					if(controller.trainClassifier)
-					{
-						db.learn(content->begin(), content->end(), to_s(controller.encoding));
-						db.save(kEncodingFrequenciesPath);
-					}
+						encoding::learn(content->begin(), content->end(), to_s(controller.encodingNoBOM));
 				}
 			}];
 		}
@@ -1116,18 +1111,13 @@ NSString* OakDocumentBookmarkIdentifier           = @"bookmark";
 - (NSImage*)icon
 {
 	// Ideally we would nil the icon in setModified: or setOnDisk: but we don’t implement these
-	if(_icon && (_icon.isModified != self.isDocumentEdited || _icon.exists != self.isOnDisk))
-		_icon = nil;
-
-	if(!_icon)
+	if(!_icon || (_iconIsModified != self.isDocumentEdited || _iconIsOnDisk != self.isOnDisk))
 	{
 		self.observeSCMStatus = YES;
-
-		_icon = [[OakFileIconImage alloc] initWithSize:NSMakeSize(16, 16)];
-		_icon.path      = _virtualPath ?: _path;
-		_icon.scmStatus = _scmStatus;
-		_icon.modified  = self.isDocumentEdited;
-		_icon.exists    = self.isOnDisk;
+		NSString* path = _virtualPath ?: _path;
+		_icon = CreateIconImageForURL(path ? [NSURL fileURLWithPath:path isDirectory:NO] : nil, self.isDocumentEdited, !self.isOnDisk, NO, NO, _scmStatus);
+		_iconIsModified = self.isDocumentEdited;
+		_iconIsOnDisk   = self.isOnDisk;
 	}
 	return _icon;
 }
@@ -1695,13 +1685,9 @@ NSString* OakDocumentBookmarkIdentifier           = @"bookmark";
 			{
 				_encoding_state = kEncodingUseFallback;
 
-				encoding::classifier_t db;
-				static std::string const kEncodingFrequenciesPath = path::join(path::home(), "Library/Caches/com.macromates.TextMate/EncodingFrequencies.binary");
-				db.load(kEncodingFrequenciesPath);
-
 				std::multimap<double, std::string> probabilities;
-				for(auto const& charset : db.charsets())
-					probabilities.emplace(1 - db.probability(content->begin(), content->end(), charset), charset);
+				for(auto const& charset : encoding::charsets())
+					probabilities.emplace(1 - encoding::probability(content->begin(), content->end(), charset), charset);
 				if(!probabilities.empty() && probabilities.begin()->first < 1)
 						context->set_charset(probabilities.begin()->second);
 				else	context->set_charset("ISO-8859-1");

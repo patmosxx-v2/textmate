@@ -13,11 +13,7 @@ static double const  kGrowFinishTime = 0.10;
 static double const  kFadeStartTime  = 0.35;
 static double const  kFadeFinishTime = 0.70;
 
-#if !defined(MAC_OS_X_VERSION_10_12) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_12)
-@interface OakPopOutView : NSView
-#else
 @interface OakPopOutView : NSView <CAAnimationDelegate>
-#endif
 {
 	OBJC_WATCH_LEAKS(OakPopOutView);
 	CALayer* imageLayer;
@@ -52,7 +48,7 @@ void OakShowPopOutAnimation (NSView* parentView, NSRect popOutRect, NSImage* anI
 	windowRect.size.width += 2 * extraWidth;
 	windowRect.size.height += 2 * extraHeight;
 
-	NSWindow* window = [[NSWindow alloc] initWithContentRect:windowRect styleMask:NSBorderlessWindowMask backing:NSBackingStoreBuffered defer:NO];
+	NSWindow* window = [[NSWindow alloc] initWithContentRect:windowRect styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
 	CFRetain((CFTypeRef)window); // isReleasedWhenClosed == YES
 	[window setBackgroundColor:[NSColor clearColor]];
 	[window setExcludedFromWindowsMenu:YES];
@@ -65,7 +61,7 @@ void OakShowPopOutAnimation (NSView* parentView, NSRect popOutRect, NSImage* anI
 
 	[anImage lockFocus];
 	[[NSColor blackColor] set];
-	NSRectFillUsingOperation((NSRect){ NSZeroPoint, [anImage size] }, NSCompositeSourceAtop);
+	NSRectFillUsingOperation((NSRect){ NSZeroPoint, [anImage size] }, NSCompositingOperationSourceAtop);
 	[anImage unlockFocus];
 
 	aView.contentImage = anImage;

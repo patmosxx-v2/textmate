@@ -25,7 +25,7 @@ void OakRunIOAlertPanel (char const* format, ...)
 
 BOOL OakIsAlternateKeyOrMouseEvent (NSUInteger flags, NSEvent* anEvent)
 {
-	return ([anEvent type] == NSLeftMouseUp || [anEvent type] == NSOtherMouseUp || [anEvent type] == NSKeyDown) && (([anEvent modifierFlags] & flags) == flags);
+	return ([anEvent type] == NSEventTypeLeftMouseUp || [anEvent type] == NSEventTypeOtherMouseUp || [anEvent type] == NSEventTypeKeyDown) && (([anEvent modifierFlags] & flags) == flags);
 }
 
 // ======================
@@ -63,14 +63,45 @@ NSUInteger const OakMoveNoActionReturn = 3;
 				row = (row + numberOfRows) % numberOfRows;
 		else	row = oak::cap((NSInteger)0, row, numberOfRows - 1);
 
-		[_tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:extend && _tableView.allowsMultipleSelection];
+		if([_tableView.delegate respondsToSelector:@selector(tableView:shouldSelectRow:)])
+		{
+			while(0 <= row && row < numberOfRows)
+			{
+				if([_tableView.delegate tableView:_tableView shouldSelectRow:row])
+					break;
+				row += anOffset > 0 ? +1 : -1;;
+			}
+
+			if(row < 0 || row >= numberOfRows)
+				row = [_tableView selectedRow];
+		}
+
+		NSIndexSet* indexes = [NSIndexSet indexSetWithIndex:row];
+		if(std::abs(anOffset) > 1 && extend && _tableView.allowsMultipleSelection)
+		{
+			NSIndexSet* selected = [_tableView selectedRowIndexes];
+			NSInteger selectedRow = anOffset < 0 ? [selected firstIndex] : [selected lastIndex];
+
+			NSInteger min = MIN(selectedRow, row);
+			NSInteger max = MAX(selectedRow, row);
+			indexes = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(min, max - min + 1)];
+
+			if([_tableView.delegate respondsToSelector:@selector(tableView:shouldSelectRow:)])
+			{
+				indexes = [indexes indexesPassingTest:^BOOL(NSUInteger index, BOOL* stop){
+					return [_tableView.delegate tableView:_tableView shouldSelectRow:index];
+				}];
+			}
+		}
+
+		[_tableView selectRowIndexes:indexes byExtendingSelection:extend && _tableView.allowsMultipleSelection];
 		[_tableView scrollRowToVisible:row];
 
 		self.returnCode = OakMoveMoveReturn;
 	}
 }
 
-- (int)visibleRows                                      { return (int)floor(NSHeight([_tableView visibleRect]) / ([_tableView rowHeight]+[_tableView intercellSpacing].height)) - 1; }
+- (NSInteger)visibleRows                                { return (NSInteger)floor(NSHeight([_tableView visibleRect]) / ([_tableView rowHeight]+[_tableView intercellSpacing].height)) - 1; }
 
 - (void)moveUp:(id)sender                               { [self moveSelectedRowByOffset:-1 extendingSelection:NO];  }
 - (void)moveDown:(id)sender                             { [self moveSelectedRowByOffset:+1 extendingSelection:NO];  }

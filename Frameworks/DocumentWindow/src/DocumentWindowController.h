@@ -2,7 +2,7 @@
 
 @class OakDocument;
 
-PUBLIC @interface DocumentWindowController : NSObject
+PUBLIC @interface DocumentWindowController : NSResponder
 @property (nonatomic) NSWindow*                                  window;
 
 @property (nonatomic) NSUUID*                                    identifier;
@@ -10,7 +10,7 @@ PUBLIC @interface DocumentWindowController : NSObject
 @property (nonatomic, readonly) NSString*                        projectPath; // effectiveProjectPath
 @property (nonatomic, readonly) NSString*                        untitledSavePath;
 
-@property (nonatomic) NSArray<OakDocument*>*                     documents;
+@property (nonatomic, readonly) NSArray<OakDocument*>*           documents;
 @property (nonatomic, readonly) OakDocument*                     selectedDocument;
 @property (nonatomic) NSUInteger                                 selectedTabIndex;
 

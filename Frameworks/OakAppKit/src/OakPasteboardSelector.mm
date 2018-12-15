@@ -39,17 +39,18 @@ static size_t line_count (std::string const& text)
 	if([self isHighlighted])
 	{
 		static NSDictionary* const highlightedAttributes = @{
-			NSForegroundColorAttributeName : [NSColor alternateSelectedControlTextColor],
-			NSParagraphStyleAttributeName  : style,
-			NSFontAttributeName            : [NSFont controlContentFontOfSize:0],
+			NSForegroundColorAttributeName: [NSColor alternateSelectedControlTextColor],
+			NSParagraphStyleAttributeName:  style,
+			NSFontAttributeName:            [NSFont controlContentFontOfSize:0],
 		};
 		return highlightedAttributes;
 	}
 	else
 	{
 		static NSDictionary* const attributes = @{
-			NSParagraphStyleAttributeName : style,
-			NSFontAttributeName           : [NSFont controlContentFontOfSize:0],
+			NSForegroundColorAttributeName: [NSColor controlTextColor],
+			NSParagraphStyleAttributeName: style,
+			NSFontAttributeName:           [NSFont controlContentFontOfSize:0],
 		};
 		return attributes;
 	}
@@ -106,8 +107,8 @@ static size_t line_count (std::string const& text)
 		{
 			NSString* moreLinesText           = [NSString stringWithFormat:@"%lu more line%s", [lines count] - [clippedLines count], ([lines count] - [clippedLines count]) != 1 ? "s" : ""];
 			NSDictionary* moreLinesAttributes = @{
-				NSForegroundColorAttributeName : ([self isHighlighted] ? [NSColor whiteColor] : [NSColor lightGrayColor]),
-				NSFontAttributeName            : [NSFont controlContentFontOfSize:[NSFont systemFontSizeForControlSize:NSSmallControlSize]],
+				NSForegroundColorAttributeName: ([self isHighlighted] ? [NSColor alternateSelectedControlTextColor] : [NSColor secondaryLabelColor]),
+				NSFontAttributeName:            [NSFont controlContentFontOfSize:[NSFont systemFontSizeForControlSize:NSControlSizeSmall]],
 			};
 			NSAttributedString* moreLines     = [[NSAttributedString alloc] initWithString:moreLinesText attributes:moreLinesAttributes];
 			NSSize size             = [moreLines size];
@@ -132,10 +133,9 @@ static size_t line_count (std::string const& text)
 {
 	NSTableView* tableView;
 	NSMutableArray* entries;
-	BOOL shouldClose;
-	BOOL shouldSendAction;
 }
 - (void)setTableView:(NSTableView*)aTableView;
+@property (nonatomic) BOOL shouldClose;
 @end
 
 @implementation OakPasteboardSelectorTableViewHelper
@@ -229,13 +229,12 @@ static size_t line_count (std::string const& text)
 
 - (void)accept:(id)sender
 {
-	shouldSendAction = entries.count > 0 ? YES : NO;
-	shouldClose = YES;
+	_shouldClose = YES;
 }
 
 - (void)cancel:(id)sender
 {
-	shouldClose = YES;
+	_shouldClose = YES;
 }
 
 - (void)doCommandBySelector:(SEL)aSelector
@@ -261,17 +260,7 @@ static size_t line_count (std::string const& text)
 
 - (void)didDoubleClickInTableView:(id)aTableView
 {
-	shouldClose = shouldSendAction = YES;
-}
-
-- (BOOL)shouldSendAction
-{
-	return shouldSendAction;
-}
-
-- (BOOL)shouldClose
-{
-	return shouldClose;
+	_shouldClose = YES;
 }
 
 - (NSArray*)entries
@@ -297,7 +286,7 @@ static size_t line_count (std::string const& text)
 	return self;
 }
 
-- (void)setIndex:(unsigned)index
+- (void)setIndex:(NSUInteger)index
 {
 	[tableView selectRowIndexes:[NSIndexSet indexSetWithIndex:index] byExtendingSelection:NO];
 }
@@ -314,7 +303,7 @@ static size_t line_count (std::string const& text)
 	return [tableViewHelper entries];
 }
 
-- (unsigned)showAtLocation:(NSPoint)aLocation
+- (NSInteger)showAtLocation:(NSPoint)aLocation
 {
 	NSWindow* parentWindow = [NSApp keyWindow];
 	NSWindow* window = [self window];
@@ -323,17 +312,17 @@ static size_t line_count (std::string const& text)
 	[window orderFront:self];
 	[tableView scrollRowToVisible:tableView.selectedRow];
 
-	while(NSEvent* event = [NSApp nextEventMatchingMask:NSAnyEventMask untilDate:[NSDate distantFuture] inMode:NSDefaultRunLoopMode dequeue:YES])
+	while(NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate distantFuture] inMode:NSDefaultRunLoopMode dequeue:YES])
 	{
-		static std::set<NSEventType> const keyEvent   = { NSKeyDown, NSKeyUp };
-		static std::set<NSEventType> const mouseEvent = { NSLeftMouseDown, NSLeftMouseUp, NSRightMouseDown, NSRightMouseUp, NSOtherMouseDown, NSOtherMouseUp };
+		static std::set<NSEventType> const keyEvent   = { NSEventTypeKeyDown, NSEventTypeKeyUp };
+		static std::set<NSEventType> const mouseEvent = { NSEventTypeLeftMouseDown, NSEventTypeLeftMouseUp, NSEventTypeRightMouseDown, NSEventTypeRightMouseUp, NSEventTypeOtherMouseDown, NSEventTypeOtherMouseUp };
 
 		bool orderOutEvent = (keyEvent.find([event type]) != keyEvent.end() && [event window] != parentWindow) || (mouseEvent.find([event type]) != mouseEvent.end() && [event window] != window);
-		if(!orderOutEvent && keyEvent.find([event type]) != keyEvent.end() && !([event modifierFlags] & NSCommandKeyMask))
+		if(!orderOutEvent && keyEvent.find([event type]) != keyEvent.end() && !([event modifierFlags] & NSEventModifierFlagCommand))
 				[window sendEvent:event];
 		else	[NSApp sendEvent:event];
 
-		if(orderOutEvent || [tableViewHelper shouldClose])
+		if(orderOutEvent || tableViewHelper.shouldClose)
 			break;
 	}
 
@@ -353,10 +342,5 @@ static size_t line_count (std::string const& text)
 - (void)setPerformsActionOnSingleClick
 {
 	[tableViewHelper setPerformsActionOnSingleClick];
-}
-
-- (BOOL)shouldSendAction
-{
-	return [tableViewHelper shouldSendAction];
 }
 @end

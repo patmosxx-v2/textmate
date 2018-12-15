@@ -5,6 +5,7 @@
 #import <OakAppKit/NSMenuItem Additions.h>
 #import <OakAppKit/OakUIConstructionFunctions.h>
 #import <OakFoundation/NSString Additions.h>
+#import <MenuBuilder/MenuBuilder.h>
 #import <bundles/bundles.h>
 #import <text/ctype.h>
 #import <ns/ns.h>
@@ -19,29 +20,33 @@ static NSTextField* OakCreateTextField (NSString* label)
 	[res setDrawsBackground:NO];
 	[res setFont:OakStatusBarFont()];
 	[res setStringValue:label];
-	[res setAlignment:NSRightTextAlignment];
-	[[res cell] setBackgroundStyle:NSBackgroundStyleRaised];
+	[res setAlignment:NSTextAlignmentRight];
 	[[res cell] setLineBreakMode:NSLineBreakByTruncatingMiddle];
+
+	// This is to match the other controls in the status bar
+	if(@available(macos 10.14, *))
+		res.textColor = NSColor.secondaryLabelColor;
+
 	return res;
 }
 
-static NSButton* OakCreateImageToggleButton (NSImage* image, NSObject* accessibilityLabel)
+static NSPopUpButton* OakCreateStatusBarPopUpButton (NSString* initialItemTitle = nil, NSString* accessibilityLabel = nil)
+{
+	NSPopUpButton* res = OakCreatePopUpButton(NO, initialItemTitle);
+	res.font     = OakStatusBarFont();
+	res.bordered = NO;
+	res.accessibilityLabel = accessibilityLabel;
+	return res;
+}
+
+static NSButton* OakCreateImageToggleButton (NSImage* image, NSString* accessibilityLabel)
 {
 	NSButton* res = [NSButton new];
-	[[res cell] setBackgroundStyle:NSBackgroundStyleRaised];
+	res.accessibilityLabel = accessibilityLabel;
 	[res setButtonType:NSToggleButton];
 	[res setBordered:NO];
 	[res setImage:image];
 	[res setImagePosition:NSImageOnly];
-	OakSetAccessibilityLabel(res, accessibilityLabel);
-	return res;
-}
-
-static NSMenuItem* OakCreateIndentMenuItem (NSString* title, SEL action, id target)
-{
-	NSMenuItem* res = [[NSMenuItem alloc] initWithTitle:title action:action keyEquivalent:@""];
-	[res setTarget:target];
-	[res setIndentationLevel:1];
 	return res;
 }
 
@@ -62,7 +67,16 @@ static NSMenuItem* OakCreateIndentMenuItem (NSString* title, SEL action, id targ
 {
 	if(self = [super initWithFrame:aRect])
 	{
-		[self setupStatusBarBackground];
+		NSImage* recordMacroImage = [NSImage imageWithSize:NSMakeSize(16, 16) flipped:NO drawingHandler:^BOOL(NSRect dstRect){
+			[NSColor.systemRedColor set];
+			[[NSBezierPath bezierPathWithOvalInRect:NSInsetRect(dstRect, 2, 2)] fill];
+			return YES;
+		}];
+
+		self.wantsLayer   = YES;
+		self.material     = NSVisualEffectMaterialTitlebar;
+		self.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+		self.state        = NSVisualEffectStateFollowsWindowActiveState;
 
 		self.selectionField               = OakCreateTextField(@"1:1");
 		self.grammarPopUp                 = OakCreateStatusBarPopUpButton(@"", @"Grammar");
@@ -70,9 +84,14 @@ static NSMenuItem* OakCreateIndentMenuItem (NSString* title, SEL action, id targ
 		self.tabSizePopUp.pullsDown       = YES;
 		self.bundleItemsPopUp             = OakCreateStatusBarPopUpButton(nil, @"Bundle Item");
 		self.symbolPopUp                  = OakCreateStatusBarPopUpButton(@"", @"Symbol");
-		self.macroRecordingButton         = OakCreateImageToggleButton([NSImage imageNamed:@"Recording" inSameBundleAsClass:[self class]], @"Record a macro");
+		self.macroRecordingButton         = OakCreateImageToggleButton(recordMacroImage, @"Record a macro");
 		self.macroRecordingButton.action  = @selector(toggleMacroRecording:);
 		self.macroRecordingButton.toolTip = @"Click to start recording a macro";
+
+		NSFontDescriptor* descriptor = [self.selectionField.font.fontDescriptor fontDescriptorByAddingAttributes:@{
+			NSFontFeatureSettingsAttribute: @[ @{ NSFontFeatureTypeIdentifierKey: @(kNumberSpacingType), NSFontFeatureSelectorIdentifierKey: @(kMonospacedNumbersSelector) } ]
+		}];
+		self.selectionField.font = [NSFont fontWithDescriptor:descriptor size:0];
 
 		[self setupTabSizeMenu:self];
 
@@ -87,8 +106,8 @@ static NSMenuItem* OakCreateIndentMenuItem (NSString* title, SEL action, id targ
 
 		NSView* wrappedBundleItemsPopUpButton = [NSView new];
 		OakAddAutoLayoutViewsToSuperview(@[ self.bundleItemsPopUp ], wrappedBundleItemsPopUpButton);
-		[wrappedBundleItemsPopUpButton addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:[popup]|" options:0 metrics:nil views:@{ @"popup" : self.bundleItemsPopUp }]];
-		[wrappedBundleItemsPopUpButton addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[popup]|" options:0 metrics:nil views:@{ @"popup" : self.bundleItemsPopUp }]];
+		[wrappedBundleItemsPopUpButton addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:[popup]|" options:0 metrics:nil views:@{ @"popup": self.bundleItemsPopUp }]];
+		[wrappedBundleItemsPopUpButton addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[popup]|" options:0 metrics:nil views:@{ @"popup": self.bundleItemsPopUp }]];
 
 		NSTextField* line    = OakCreateTextField(@"Line:");
 
@@ -99,18 +118,18 @@ static NSMenuItem* OakCreateIndentMenuItem (NSString* title, SEL action, id targ
 		NSView* dividerFive  = OakCreateDividerImageView();
 
 		NSDictionary* views = @{
-			@"line"         : line,
-			@"selection"    : self.selectionField,
-			@"dividerOne"   : dividerOne,
-			@"grammar"      : self.grammarPopUp,
-			@"dividerTwo"   : dividerTwo,
-			@"items"        : wrappedBundleItemsPopUpButton,
-			@"dividerThree" : dividerThree,
-			@"tabSize"      : self.tabSizePopUp,
-			@"dividerFour"  : dividerFour,
-			@"symbol"       : self.symbolPopUp,
-			@"dividerFive"  : dividerFive,
-			@"recording"    : self.macroRecordingButton,
+			@"line":         line,
+			@"selection":    self.selectionField,
+			@"dividerOne":   dividerOne,
+			@"grammar":      self.grammarPopUp,
+			@"dividerTwo":   dividerTwo,
+			@"items":        wrappedBundleItemsPopUpButton,
+			@"dividerThree": dividerThree,
+			@"tabSize":      self.tabSizePopUp,
+			@"dividerFour":  dividerFour,
+			@"symbol":       self.symbolPopUp,
+			@"dividerFive":  dividerFive,
+			@"recording":    self.macroRecordingButton,
 		};
 
 		OakAddAutoLayoutViewsToSuperview([views allValues], self);
@@ -125,13 +144,8 @@ static NSMenuItem* OakCreateIndentMenuItem (NSString* title, SEL action, id targ
 		[self.symbolPopUp setContentHuggingPriority:NSLayoutPriorityDefaultLow-1 forOrientation:NSLayoutConstraintOrientationHorizontal];
 		[self.symbolPopUp setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow-1 forOrientation:NSLayoutConstraintOrientationHorizontal];
 
-		[self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-10-[line]-[selection(>=50,<=225)]-8-[dividerOne]-(-2)-[grammar(>=125@400,>=50,<=225)]-5-[dividerTwo]-(-2)-[tabSize(<=102)]-4-[dividerThree]-5-[items(==30)]-4-[dividerFour]-(-2)-[symbol(>=125@450,>=50)]-5-[dividerFive]-6-[recording]-7-|" options:0 metrics:nil views:views]];
-		[self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[dividerOne(==dividerTwo,==dividerThree,==dividerFour,==dividerFive)]|" options:0 metrics:nil views:views]];
-
-		[self addConstraint:[NSLayoutConstraint constraintWithItem:dividerTwo   attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:self attribute:NSLayoutAttributeTop multiplier:1.0 constant:0.0]];
-		[self addConstraint:[NSLayoutConstraint constraintWithItem:dividerThree attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:self attribute:NSLayoutAttributeTop multiplier:1.0 constant:0.0]];
-		[self addConstraint:[NSLayoutConstraint constraintWithItem:dividerFour  attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:self attribute:NSLayoutAttributeTop multiplier:1.0 constant:0.0]];
-		[self addConstraint:[NSLayoutConstraint constraintWithItem:dividerFive  attribute:NSLayoutAttributeTop relatedBy:NSLayoutRelationEqual toItem:self attribute:NSLayoutAttributeTop multiplier:1.0 constant:0.0]];
+		[self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-10-[line]-[selection(>=50,<=225)]-8-[dividerOne]-(-2)-[grammar(>=125@400,>=50,<=225)]-5-[dividerTwo]-(-2)-[tabSize]-4-[dividerThree]-5-[items(==31)]-4-[dividerFour]-(-2)-[symbol(>=125@450,>=50)]-5-[dividerFive]-6-[recording]-7-|" options:0 metrics:nil views:views]];
+		[self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[dividerOne(==dividerTwo,==dividerThree,==dividerFour,==dividerFive)]|" options:NSLayoutFormatAlignAllTop metrics:nil views:views]];
 
 		// Baseline align text-controls
 		[self addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:[line]-[selection]-(>=1)-[grammar]-(>=1)-[tabSize]-(>=1)-[symbol]" options:NSLayoutFormatAlignAllBaseline metrics:nil views:views]];
@@ -147,21 +161,20 @@ static NSMenuItem* OakCreateIndentMenuItem (NSString* title, SEL action, id targ
 
 - (void)setupTabSizeMenu:(id)sender
 {
-	NSMenu* tabSizeMenu = self.tabSizePopUp.menu;
-	[tabSizeMenu removeAllItems];
-	[tabSizeMenu addItemWithTitle:@"Current Indent" action:NULL keyEquivalent:@""];
-	[tabSizeMenu addItemWithTitle:@"Indent Size" action:@selector(nop:) keyEquivalent:@""];
-	for(auto size : { 2, 3, 4, 8 })
-	{
-		NSMenuItem* item = OakCreateIndentMenuItem([NSString stringWithFormat:@"%d", size], @selector(takeTabSizeFrom:), self.target);
-		[item setTag:size];
-		[tabSizeMenu addItem:item];
-	}
-	[tabSizeMenu addItem:OakCreateIndentMenuItem(@"Other…", @selector(showTabSizeSelectorPanel:), self.target)];
-	[tabSizeMenu addItem:[NSMenuItem separatorItem]];
-	[[tabSizeMenu addItemWithTitle:@"Indent Using" action:@selector(nop:) keyEquivalent:@""] setTarget:self.target];
-	[tabSizeMenu addItem:OakCreateIndentMenuItem(@"Tabs", @selector(setIndentWithTabs:), self.target)];
-	[tabSizeMenu addItem:OakCreateIndentMenuItem(@"Spaces", @selector(setIndentWithSpaces:), self.target)];
+	MBMenu const items = {
+		{ @"Current Indent" },
+		{ @"Indent Size",  @selector(nop:) },
+		{ @"2",            @selector(takeTabSizeFrom:), .tag = 2, .target = self.target, .indent = 1 },
+		{ @"3",            @selector(takeTabSizeFrom:), .tag = 3, .target = self.target, .indent = 1 },
+		{ @"4",            @selector(takeTabSizeFrom:), .tag = 4, .target = self.target, .indent = 1 },
+		{ @"8",            @selector(takeTabSizeFrom:), .tag = 8, .target = self.target, .indent = 1 },
+		{ @"Other…",       @selector(showTabSizeSelectorPanel:),  .target = self.target, .indent = 1 },
+		{ /* -------- */ },
+		{ @"Indent Using", @selector(nop:) },
+		{ @"Tabs",         @selector(setIndentWithTabs:),         .target = self.target, .indent = 1 },
+		{ @"Spaces",       @selector(setIndentWithSpaces:),       .target = self.target, .indent = 1 },
+	};
+	self.tabSizePopUp.menu = MBCreateMenu(items);
 }
 
 - (void)setTarget:(id)newTarget
@@ -173,16 +186,6 @@ static NSMenuItem* OakCreateIndentMenuItem (NSString* title, SEL action, id targ
 - (NSSize)intrinsicContentSize
 {
 	return NSMakeSize(NSViewNoInstrinsicMetric, 24);
-}
-
-- (void)drawRect:(NSRect)aRect
-{
-	if([self.window contentBorderThicknessForEdge:NSMinYEdge] < NSMaxY(self.frame))
-	{
-		[[NSColor windowBackgroundColor] set];
-		NSRectFill(aRect);
-		[super drawRect:aRect];
-	}
 }
 
 - (void)updateMacroRecordingAnimation:(NSTimer*)aTimer

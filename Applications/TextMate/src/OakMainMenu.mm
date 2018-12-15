@@ -1,8 +1,9 @@
-#include <ns/ns.h>
-#include <bundles/bundles.h>
-#include <OakFoundation/NSString Additions.h>
-#include <BundleMenu/BundleMenu.h>
-#include <crash/info.h>
+#import "OakMainMenu.h"
+#import <ns/ns.h>
+#import <bundles/bundles.h>
+#import <OakFoundation/NSString Additions.h>
+#import <BundleMenu/BundleMenu.h>
+#import <crash/info.h>
 
 /*
 
@@ -46,12 +47,6 @@ static CGPoint MenuPosition ()
 	return pos;
 }
 
-@interface OakMainMenu : NSMenu
-{
-	IBOutlet NSMenuItem* bundlesMenuItem;
-}
-@end
-
 @implementation OakMainMenu
 - (BOOL)performWindowMenuAction:(SEL)anAction
 {
@@ -76,16 +71,18 @@ static CGPoint MenuPosition ()
 	auto const bundleItems = bundles::query(bundles::kFieldKeyEquivalent, keyString, "", bundles::kItemTypeCommand|bundles::kItemTypeGrammar|bundles::kItemTypeSnippet);
 	if(!bundleItems.empty())
 	{
-		if(bundles::item_ptr item = OakShowMenuForBundleItems(bundleItems, MenuPosition()))
-			[NSApp sendAction:@selector(performBundleItemWithUUIDStringFrom:) to:nil from:@{ @"representedObject" : to_ns(item->uuid()) }];
+		if(bundles::item_ptr item = OakShowMenuForBundleItems(bundleItems, nil, MenuPosition()))
+			[NSApp sendAction:@selector(performBundleItemWithUUIDStringFrom:) to:nil from:@{ @"representedObject": to_ns(item->uuid()) }];
 		return YES;
 	}
 
 	if([super performKeyEquivalent:anEvent])
 		return YES;
-	else if(keyString == "~@\uF702") // ⌥⌘⇠
+	else if(@available(macos 10.13, *))
+		return NO;
+	else if(keyString == "~@\uF702" || keyString == "@{") // ⌥⌘⇠ or ⌘{
 		return [self performWindowMenuAction:@selector(selectPreviousTab:)];
-	else if(keyString == "~@\uF703") // ⌥⌘⇢
+	else if(keyString == "~@\uF703" || keyString == "@}") // ⌥⌘⇢ or ⌘}
 		return [self performWindowMenuAction:@selector(selectNextTab:)];
 	return NO;
 }

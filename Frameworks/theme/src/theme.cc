@@ -2,6 +2,8 @@
 #include <cf/cf.h>
 
 char const* kMacClassicThemeUUID = "71D40D9D-AE48-11D9-920A-000D93589AF6";
+char const* kTwilightThemeUUID   = "766026CB-703D-4610-B070-8DE07D967C5F";
+char const* kSystemUIThemeUUID   = "64A455D4-9CF4-47C7-B484-3181471D1FD2";
 
 static theme_t::color_info_t read_color (std::string const& str_color);
 static CGFloat read_font_size (std::string const& str_font_size);
@@ -172,8 +174,8 @@ bool gutter_styles_t::is_transparent () const
 theme_ptr theme_t::copy_with_font_name_and_size (std::string const& fontName, CGFloat fontSize)
 {
 	if(_font_name == fontName && _font_size == fontSize)
-		return std::make_shared<theme_t::theme_t>(*this);
-	return std::make_shared<theme_t::theme_t>(this->_item, fontName, fontSize);
+		return std::make_shared<theme_t>(*this);
+	return std::make_shared<theme_t>(this->_item, fontName, fontSize);
 }
 
 theme_t::theme_t (bundles::item_ptr const& themeItem, std::string const& fontName, CGFloat fontSize) :_item(themeItem), _font_name(fontName), _font_size(fontSize)
@@ -404,7 +406,7 @@ styles_t const& theme_t::styles_for_scope (scope::scope_t const& scope) const
 		CTFontPtr font;
 		if(base.font_name != NULL_STR)
 				font.reset(CTFontCreateWithName(cf::wrap(base.font_name), base.font_size, nullptr), CFRelease);
-		else	font.reset(CTFontCreateUIFontForLanguage(kCTFontUserFixedPitchFontType, base.font_size, nullptr), CFRelease);
+		else	font.reset(CTFontCreateUIFontForLanguage(kCTFontUIFontUserFixedPitch, base.font_size, nullptr), CFRelease);
 
 		if(CTFontSymbolicTraits traits = (base.bold == bool_true ? kCTFontBoldTrait : 0) + (base.italic == bool_true ? kCTFontItalicTrait : 0))
 		{
@@ -429,13 +431,13 @@ static theme_t::color_info_t read_color (std::string const& str_color)
 	unsigned int col[4] = { 0x00, 0x00, 0x00, 0xFF } ;
 
 	if(3 <= sscanf(str_color.c_str(), "#%02x%02x%02x%02x", &col[R], &col[G], &col[B], &col[A]))
-		return theme_t::color_info_t::color_info_t(col[R]/255.0, col[G]/255.0, col[B]/255.0, col[A]/255.0);
+		return theme_t::color_info_t(col[R]/255.0, col[G]/255.0, col[B]/255.0, col[A]/255.0);
 
 	col[A] = 0xF;
 	if(3 <= sscanf(str_color.c_str(), "#%1x%1x%1x%1x", &col[R], &col[G], &col[B], &col[A]))
-		return theme_t::color_info_t::color_info_t(col[R]/15.0, col[G]/15.0, col[B]/15.0, col[A]/15.0);
+		return theme_t::color_info_t(col[R]/15.0, col[G]/15.0, col[B]/15.0, col[A]/15.0);
 
-	return theme_t::color_info_t::color_info_t(); // color is not set
+	return theme_t::color_info_t(); // color is not set
 }
 
 static theme_t::color_info_t blend (theme_t::color_info_t const& lhs, theme_t::color_info_t const& rhs)

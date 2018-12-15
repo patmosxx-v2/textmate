@@ -12,4 +12,6 @@
 #import <Quartz/Quartz.h> // includes the private QuickLookUI.h
 #import <WebKit/WebKit.h>
 
+#include "oak/sdk-compat.h"
+
 #endif /* end of include guard: PRELUDE_M_PCH_KZLXVFRT */
